@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lucas-clemente/quic-go/logging"
+	"github.com/lucas-clemente/quic-go/metrics"
 	"github.com/lucas-clemente/quic-go/qlog"
 )
 
@@ -19,11 +20,19 @@ func init() {
 	if len(qlogDir) == 0 {
 		return
 	}
-	initQlogger(qlogDir)
+	initTracer(qlogDir)
 }
 
-func initQlogger(qlogDir string) {
-	tracer = qlog.NewTracer(func(role logging.Perspective, connID []byte) io.WriteCloser {
+func initTracer(qlogDir string) {
+	tracers := []logging.Tracer{metrics.NewTracer()}
+	if qlogger := initQlogger(qlogDir); qlogger != nil {
+		tracers = append(tracers, qlogger)
+	}
+	tracer = logging.NewMultiplexedTracer(tracers...)
+}
+
+func initQlogger(qlogDir string) logging.Tracer {
+	return qlog.NewTracer(func(role logging.Perspective, connID []byte) io.WriteCloser {
 		// create the QLOGDIR, if it doesn't exist
 		if err := os.MkdirAll(qlogDir, 0777); err != nil {
 			log.Errorf("creating the QLOGDIR failed: %s", err)
